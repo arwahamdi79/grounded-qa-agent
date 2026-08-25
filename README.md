@@ -50,10 +50,9 @@ the retrieved context.
 - Python 3.10+
 - A **remote Qdrant** cluster (Qdrant Cloud free tier works). Get the
   **cluster URL** and **API key** from the Qdrant Cloud web UI.
-- An **OpenAI API key** (used for embeddings; also used as the default chat
-  model).
-- Optionally, an **Anthropic API key** if you set `LLM_PROVIDER=anthropic` to
-  use Claude for the Researcher/Reviewer chat model instead of GPT.
+- An **OpenAI API key** if you use `LLM_PROVIDER=openai` (the default) for the Researcher and Reviewer chat model.
+- The application uses **Hugging Face `sentence-transformers/all-MiniLM-L6-v2` locally for embeddings**, so an OpenAI key is not required for embeddings.
+- Optionally, an **Anthropic API key** if you set `LLM_PROVIDER=anthropic` to use Claude for the Researcher/Reviewer chat model instead of OpenAI.
 
 ## 2. Setup
 
@@ -134,10 +133,10 @@ Cairo?") to see the Researcher refuse rather than fabricate an answer.
 | `QDRANT_URL` | yes | Remote Qdrant cluster URL |
 | `QDRANT_API_KEY` | yes | Remote Qdrant API key |
 | `QDRANT_COLLECTION` | no | Collection name (default `langchain_qdrant_docs`) |
-| `OPENAI_API_KEY` | yes | Used for embeddings; default chat model provider |
+| `OPENAI_API_KEY` | only if `LLM_PROVIDER=openai` | OpenAI API key for the Researcher/Reviewer chat model |
 | `LLM_PROVIDER` | no | `openai` (default) or `anthropic` |
 | `ANTHROPIC_API_KEY` | only if `LLM_PROVIDER=anthropic` | Anthropic API key |
-| `EMBEDDING_MODEL` | no | Default `text-embedding-3-small` |
+| `EMBEDDING_MODEL` | no | Default `sentence-transformers/all-MiniLM-L6-v2` |
 | `CHAT_MODEL_OPENAI` | no | Default `gpt-4o-mini` |
 | `CHAT_MODEL_ANTHROPIC` | no | Default `claude-sonnet-4-6` |
 | `RETRIEVAL_K` | no | Passages retrieved per search (default `6`) |
@@ -146,10 +145,52 @@ Cairo?") to see the Researcher refuse rather than fabricate an answer.
 ## Troubleshooting
 
 - **"Missing required environment variables"** on app start → you haven't
-  copied `.env.example` to `.env` or filled in a required key.
+  #   QDRANT_URL and QDRANT_API_KEY
+#   Plus the API key for your selected LLM_PROVIDER.
 - **Empty / irrelevant retrieval results** → re-run `python ingest.py
   --recreate` to make sure the collection was actually populated (check the
   point count in the Qdrant Cloud web UI).
 - **Qdrant collection dimension mismatch** → the collection was created with
   a different embedding size previously; run `python ingest.py --recreate`
   to rebuild it against the current `EMBEDDING_MODEL`.
+
+
+  ## Testing
+
+The application should be tested with both supported and unsupported questions.
+
+### Supported question
+
+Example:
+
+> What is Qdrant used for in LangChain?
+
+Expected behavior:
+
+- The Researcher retrieves relevant LangChain/Qdrant documentation.
+- The Researcher produces an answer with citation markers.
+- The Reviewer checks the answer against the retrieved passages.
+- The final result is marked `APPROVED` when the claims are supported.
+
+### Unsupported question
+
+Example:
+
+> What is the weather in Cairo?
+
+Expected behavior:
+
+- The Researcher does not use outside knowledge.
+- If the retrieved documentation does not support the answer, the Researcher returns a `REFUSE:` response.
+- The Reviewer approves the refusal.
+- The UI displays the result as `REFUSED`.
+
+### Handoff test
+
+When the Reviewer rejects a draft and the loop budget remains, the workflow routes:
+
+Researcher → Reviewer → Researcher → Reviewer → Finalize
+
+The Streamlit UI reports when a Reviewer→Researcher revision occurred.
+
+- **OpenAI `429 insufficient_quota`** → the configured OpenAI API key has no available API quota. The application code can still be run with another valid API key by setting `OPENAI_API_KEY` in `.env`. API keys are not included in the repository.
