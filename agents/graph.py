@@ -51,7 +51,7 @@ def _finalize_node(state: QAState) -> QAState:
 def _route_after_review(state: QAState) -> str:
     if state.get("verdict") == "APPROVED":
         return "finalize"
-    if state.get("loop_count", 0) < config.MAX_REVIEW_LOOPS:
+    if state.get("loop_count", 0) <= config.MAX_REVIEW_LOOPS:
         return "researcher"  # active handoff back to the researcher
     return "finalize"
 
